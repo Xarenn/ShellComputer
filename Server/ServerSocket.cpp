@@ -1,6 +1,15 @@
 #include "Headers\ServerSocket.h"
 
+
+static std::string COMMAND_NOT_FOUND = "Command not found. Use /cmd help";
+static std::string SOCKET_CREATING_ERROR = "Error creating socket";
+static std::string BIND_FAILED = "Bind() failed";
+static std::string LISTEN_FAILED = "Error listening on socket";
+
+std::string receive_buff;
+
 ServerSocket::ServerSocket(){
+	help = "Usage: shellcomputer.exe <ip> <port> /n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkcon";
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR)
 		printf("Initialization error.\n");
@@ -8,7 +17,7 @@ ServerSocket::ServerSocket(){
 	main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (main == INVALID_SOCKET)
 	{
-		printf("Error creating socket: %ld\n", WSAGetLastError());
+		printf("%s: %ld\n", SOCKET_CREATING_ERROR, WSAGetLastError());
 	}
 
 	sockaddr_in service;
@@ -19,7 +28,7 @@ ServerSocket::ServerSocket(){
 
 	if (bind(main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
 	{
-		printf("bind() failed.\n");
+		printf("%s\n", BIND_FAILED);
 		closesocket(main);
 	}
 }
@@ -31,7 +40,7 @@ ServerSocket::~ServerSocket() {
 SOCKET ServerSocket::accept_client() {
 	SOCKET acceptSocket = SOCKET_ERROR;
 	if (listen(main, 1) == SOCKET_ERROR) {
-		printf("Error listening on socket.\n");
+		printf("%s.\n", LISTEN_FAILED);
 	}
 	while (acceptSocket == SOCKET_ERROR) {
 		acceptSocket = accept(main, NULL, NULL);
@@ -61,10 +70,55 @@ std::string get_address() {
 	return inet_ntoa(addr);
 }
 
+void ServerSocket::exec_cmd(std::string cmd) {
+
+}
+
+void ServerSocket::list_cmd() {
+
+}
+
+void ServerSocket::check_connections_cmd() {
+
+}
+
+std::string ServerSocket::find_cmd(std::string& recvbuff) {
+	std::string tag = "/cmd";
+	auto it = std::find_first_of(recvbuff.begin(), recvbuff.end(), tag.begin(), tag.end());
+	if (it == recvbuff.end()) {
+		return COMMAND_NOT_FOUND;
+	}
+	else {
+		int pos = std::distance(recvbuff.begin(), it);
+		return recvbuff.substr(pos);
+	}
+}
+
+void ServerSocket::parse_cmd(std::string& cmd) {
+	const std::string help = "help";
+	const std::string exec = "exe";
+	const std::string list = "list";
+	const std::string check_connections = "checkcon";
+
+	if (cmd.find(help)) {
+		printf("%s", this->help);
+	}
+	if (int pos = cmd.find(exec)) {
+		exec_cmd(cmd.substr(pos));
+	}
+	if (cmd.find(list)) {
+		list_cmd();
+	}
+	if (cmd.find(check_connections)) {
+		check_connections_cmd();
+	}
+
+}
+
 void handle_new_connection(SOCKET sock) {
 	int bytesRecv = SOCKET_ERROR;
 	int bytesSent = SOCKET_ERROR;
-	std::string server_header = "Hello im server. My IP: "+get_address();
+	std::string server_header = "Hello im server. My IP: " + get_address();
 	char recvbuf[4096];
 	bytesSent = send(sock, server_header.c_str(), server_header.size(), 1);
 	while (sock != SOCKET_ERROR) {
@@ -74,7 +128,8 @@ void handle_new_connection(SOCKET sock) {
 		}
 		printf("%s\n", recvbuf);
 		if (recvbuf > 0) {
-			bytesSent = send(sock, ".!.", 4, 1);
+			receive_buff = recvbuf;
+			continue;
 		}
 		memset(recvbuf, 0, sizeof(recvbuf));
 	}

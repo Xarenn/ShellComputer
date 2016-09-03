@@ -72,17 +72,31 @@ ClientSocket::ClientSocket() {
 }
 
 void ClientSocket::send_command() {
-	char recvbuf[1024];
 	std::string sendbuf;
-	recv(main, recvbuf, 1024, 0);
-	printf("%s\n", recvbuf);
 	send(main, this->header.c_str(), sizeof(this->header), 1);
 	while (std::getline(std::cin, sendbuf)) {
 		send(main, sendbuf.c_str(), sizeof(sendbuf), 1);
-		recv(main, recvbuf, 1024, 0);
-		printf("%s\n", recvbuf);
 		sendbuf.clear();
-		memset(recvbuf, 0, strlen(recvbuf));
 	}
 	
+}
+
+void ClientSocket::receive_info() {
+	int recv_bytes = SOCKET_ERROR;
+	char recvbuf[1024]; 	
+	while (recv_bytes == SOCKET_ERROR) {
+		recv_bytes = recv(main, recvbuf, 1024, 0);
+		if (recv_bytes < 0) {
+			recv_bytes = SOCKET_ERROR;
+			continue;
+		}
+		printf("%s", recvbuf);
+		memset(recvbuf, 0, strlen(recvbuf));
+	}
+}
+
+void ClientSocket::client_loop() {
+	std::thread receive_cmd(&ClientSocket::receive_info, this);
+	std::thread send_cmd(&ClientSocket::send_command, this);
+
 }
