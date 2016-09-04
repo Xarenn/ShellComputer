@@ -18,21 +18,27 @@
 #include <thread>
 #include <list>
 
-class ServerSocket {
-public:
-	std::string find_cmd(std::string& recvbuff);
-	void parse_cmd(std::string& cmd);
-	
+#define BUFFER_MAX 128
 
-	void exec_cmd(std::string cmd);
+class ServerSocket {
+	using Socket = SOCKET;
+public:
+	void command_exec(Socket sock, std::string& cmd);
+	void exec_cmd(const std::string&& cmd);
 	void list_cmd();
 	void check_connections_cmd();
 
+	std::string check_cmd(const std::string& cmd);
+	std::string find_cmd(const std::string& cmd);
+
+	ServerSocket(const std::string ip, int port);
+	ServerSocket(bool methods);
 	ServerSocket();
-	SOCKET accept_client();
+	Socket accept_client();
+	void error_output(Socket sock, std::string& error);
+	void error_output(std::string& error);
 	~ServerSocket();
 private:
-	SOCKET main;
+	Socket main;
 	WSADATA wsaData;
-	std::string help;
 };

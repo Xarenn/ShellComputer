@@ -27,7 +27,7 @@ void ClientSocket::connect_server() {
 	service.sin_family = AF_INET;
 	service.sin_addr.s_addr = inet_addr(ip.c_str());
 	service.sin_port = htons(port);
-	if (connect(main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
+	if (connect(this->main_socket, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
 	{
 		printf("Failed to connect.\n");
 		WSACleanup();
@@ -43,13 +43,13 @@ ClientSocket::ClientSocket(std::string ip, int port){
 	if (result != NO_ERROR)
 		printf("Initialization error.\n");
 
-	main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (main == INVALID_SOCKET)
+	this->main_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (this->main_socket == INVALID_SOCKET)
 	{
 		printf("Error creating socket: %ld\n", WSAGetLastError());
 	}
 	std::string ip_s = get_address();
-	std::string header = "Shell ---- IP: " + ip_s;
+	std::string header = "Shell Client Joined ---- IP: " + ip_s;
 	this->header.append(header);
 }
 
@@ -61,42 +61,47 @@ ClientSocket::ClientSocket() {
 	if (result != NO_ERROR)
 		printf("Initialization error.\n");
 
-	main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (main == INVALID_SOCKET)
+	this->main_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (this->main_socket == INVALID_SOCKET)
 	{
 		printf("Error creating socket: %ld\n", WSAGetLastError());
 	}
 	std::string ip_s = get_address();
-	std::string header = "Shell ---- IP: " + ip_s;
-	this->header.append(header);
+	std::string header = "Shell Client Joined ---- IP: " + ip_s;
+	this->header = header;
 }
-
-void ClientSocket::send_command() {
+void send_command(Socket sock) {
 	std::string sendbuf;
-	send(main, this->header.c_str(), sizeof(this->header), 1);
 	while (std::getline(std::cin, sendbuf)) {
-		send(main, sendbuf.c_str(), sizeof(sendbuf), 1);
-		sendbuf.clear();
+			send(sock, sendbuf.c_str(), (strlen(sendbuf.c_str())) + 1, 1);
+			if (sendbuf == "exit") {
+				exit(1);
+				sock = SOCKET_ERROR;
+			}
+			sendbuf.clear();
 	}
 	
 }
 
-void ClientSocket::receive_info() {
+void receive_info(Socket sock) {
 	int recv_bytes = SOCKET_ERROR;
-	char recvbuf[1024]; 	
-	while (recv_bytes == SOCKET_ERROR) {
-		recv_bytes = recv(main, recvbuf, 1024, 0);
+	char recvbuf[BUFFER_MAX];
+
+	while (sock != SOCKET_ERROR) {
+		recv_bytes = recv(sock, recvbuf, BUFFER_MAX, 0);
 		if (recv_bytes < 0) {
-			recv_bytes = SOCKET_ERROR;
-			continue;
+			break;
 		}
-		printf("%s", recvbuf);
-		memset(recvbuf, 0, strlen(recvbuf));
+		printf("[Bytes]: %i, Text: %s\n", recv_bytes, recvbuf);
+		memset(recvbuf, 0, sizeof(recvbuf));
 	}
 }
 
 void ClientSocket::client_loop() {
-	std::thread receive_cmd(&ClientSocket::receive_info, this);
-	std::thread send_cmd(&ClientSocket::send_command, this);
+	int recv = send(this->main_socket, this->header.c_str(), header.size()+1 != 43 ? 43 : header.size()+1, 1);
+	std::thread receive_thr(receive_info, this->main_socket);
+	std::thread send_thr(send_command, this->main_socket);
+	receive_thr.join();
+	send_thr.join();
 
 }

@@ -1,23 +1,50 @@
 #include "Headers\ServerSocket.h"
 
+static std::string PREFIX_ERROR = "[ERROR] ";
 
-static std::string COMMAND_NOT_FOUND = "Command not found. Use /cmd help";
-static std::string SOCKET_CREATING_ERROR = "Error creating socket";
-static std::string BIND_FAILED = "Bind() failed";
-static std::string LISTEN_FAILED = "Error listening on socket";
+static std::string COMMAND_NOT_FOUND = (PREFIX_ERROR.append("Command not found. Use /cmd help\n"));
+static std::string SOCKET_CREATING_ERROR = (PREFIX_ERROR.append("Error creating socket\n"));
+static std::string BIND_FAILED = (PREFIX_ERROR.append("Bind() failed\n"));
+static std::string LISTEN_FAILED = (PREFIX_ERROR.append("Error listening on socket\n"));
+static std::string COMMAND_TOO_LONG = (PREFIX_ERROR.append("Command is too long\n"));
+static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkconn";
+static std::string EXIT = "exit";
 
-std::string receive_buff;
+ServerSocket::ServerSocket(bool methods) {}
 
-ServerSocket::ServerSocket(){
-	help = "Usage: shellcomputer.exe <ip> <port> /n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkcon";
+ServerSocket::ServerSocket(std::string ip, int port) {
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR)
 		printf("Initialization error.\n");
 
-	main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (main == INVALID_SOCKET)
+	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (this->main == INVALID_SOCKET)
 	{
-		printf("%s: %ld\n", SOCKET_CREATING_ERROR, WSAGetLastError());
+		printf("%s: %ld", SOCKET_CREATING_ERROR, WSAGetLastError());
+	}
+
+	sockaddr_in service;
+	memset(&service, 0, sizeof(service));
+	service.sin_family = AF_INET;
+	service.sin_addr.s_addr = inet_addr(ip.c_str());
+	service.sin_port = htons(port);
+
+	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
+	{
+		printf("%s", BIND_FAILED);
+		closesocket(this->main);
+	}
+}
+
+ServerSocket::ServerSocket(){
+	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (result != NO_ERROR)
+		printf("Initialization error.\n");
+
+	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (this->main == INVALID_SOCKET)
+	{
+		printf("%s: %ld", SOCKET_CREATING_ERROR, WSAGetLastError());
 	}
 
 	sockaddr_in service;
@@ -26,24 +53,24 @@ ServerSocket::ServerSocket(){
 	service.sin_addr.s_addr = inet_addr("127.0.0.1");
 	service.sin_port = htons(1337);
 
-	if (bind(main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
+	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
 	{
-		printf("%s\n", BIND_FAILED);
-		closesocket(main);
+		printf("%s", BIND_FAILED);
+		closesocket(this->main);
 	}
 }
 
 ServerSocket::~ServerSocket() {
-	closesocket(main);
+	closesocket(this->main);
 }
 
 SOCKET ServerSocket::accept_client() {
 	SOCKET acceptSocket = SOCKET_ERROR;
-	if (listen(main, 1) == SOCKET_ERROR) {
-		printf("%s.\n", LISTEN_FAILED);
+	if (listen(this->main, 1) == SOCKET_ERROR) {
+		printf("%s.", LISTEN_FAILED);
 	}
 	while (acceptSocket == SOCKET_ERROR) {
-		acceptSocket = accept(main, NULL, NULL);
+		acceptSocket = accept(this->main, NULL, NULL);
 	}
 	printf("Client joined\n");
 	return acceptSocket;
@@ -70,7 +97,7 @@ std::string get_address() {
 	return inet_ntoa(addr);
 }
 
-void ServerSocket::exec_cmd(std::string cmd) {
+void ServerSocket::exec_cmd(const std::string&& cmd) {
 
 }
 
@@ -82,56 +109,119 @@ void ServerSocket::check_connections_cmd() {
 
 }
 
-std::string ServerSocket::find_cmd(std::string& recvbuff) {
+void ServerSocket::error_output(Socket sock, std::string& error) {
+	send(sock, error.c_str(), error.size() + 1, 1);
+	std::cout << error;
+	return;
+}
+
+void ServerSocket::error_output(std::string& error) {
+	std::cout << error;
+	return;
+}
+
+std::string ServerSocket::check_cmd(const std::string& cmd) {
+	if (cmd.size() == 0) {
+		error_output(COMMAND_NOT_FOUND);
+		return COMMAND_NOT_FOUND;
+	}
+	if (cmd.size() >= BUFFER_MAX) {
+		error_output(COMMAND_TOO_LONG);
+		return COMMAND_TOO_LONG;
+	}
+	if (cmd.size() < 4) {
+		error_output(COMMAND_NOT_FOUND);
+		return COMMAND_NOT_FOUND;
+	}
+	return cmd;
+}
+
+std::string ServerSocket::find_cmd(const std::string& cmd) {
 	std::string tag = "/cmd";
-	auto it = std::find_first_of(recvbuff.begin(), recvbuff.end(), tag.begin(), tag.end());
-	if (it == recvbuff.end()) {
+	auto it = std::find_first_of(cmd.begin(), cmd.end(), tag.begin(), tag.end());
+	if (it == cmd.end()) {
+		return COMMAND_NOT_FOUND;
+	}
+	if(cmd.size() < 4){
 		return COMMAND_NOT_FOUND;
 	}
 	else {
-		int pos = std::distance(recvbuff.begin(), it);
-		return recvbuff.substr(pos);
+		int pos = std::distance(cmd.begin(), it);
+		if (cmd[pos + 1] == 0x20) {
+			return cmd.substr(pos + tag.size());
+		}else{
+			return COMMAND_NOT_FOUND;
+		}
 	}
 }
 
-void ServerSocket::parse_cmd(std::string& cmd) {
+void ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	const std::string help = "help";
 	const std::string exec = "exe";
 	const std::string list = "list";
-	const std::string check_connections = "checkcon";
+	const std::string check_connections = "checkconn";
+	if (cmd.empty()) {
+		error_output(sock, COMMAND_NOT_FOUND);
+	}
+	std::string _cmd = check_cmd(cmd);
+	if (_cmd != COMMAND_NOT_FOUND || _cmd != COMMAND_TOO_LONG) {
+		_cmd = find_cmd(cmd);
+		if (_cmd == COMMAND_NOT_FOUND) {
+			error_output(sock, COMMAND_NOT_FOUND);
+		}
 
-	if (cmd.find(help)) {
-		printf("%s", this->help);
-	}
-	if (int pos = cmd.find(exec)) {
-		exec_cmd(cmd.substr(pos));
-	}
-	if (cmd.find(list)) {
-		list_cmd();
-	}
-	if (cmd.find(check_connections)) {
-		check_connections_cmd();
-	}
+		if (_cmd == COMMAND_TOO_LONG) {
+			error_output(sock, COMMAND_TOO_LONG);
+		}
 
+		_cmd.erase(remove_if(_cmd.begin(), _cmd.end(), isspace), _cmd.end());
+
+		if (_cmd.empty()) {
+			error_output(sock, COMMAND_NOT_FOUND);
+		}
+
+		if (_cmd == help) {
+			error_output(sock, HELP);
+		}
+
+		if (_cmd == list) {
+			list_cmd();
+		}
+
+		if (_cmd == check_connections) {
+			check_connections_cmd();
+		}
+
+		if (_cmd == EXIT) {
+			sock = SOCKET_ERROR;
+		}
+	}
+	else {
+		error_output(sock, COMMAND_NOT_FOUND);
+	}
 }
 
 void handle_new_connection(SOCKET sock) {
-	int bytesRecv = SOCKET_ERROR;
-	int bytesSent = SOCKET_ERROR;
+	int bytes_recv = SOCKET_ERROR;
+	int bytes_sent = SOCKET_ERROR;
 	std::string server_header = "Hello im server. My IP: " + get_address();
-	char recvbuf[4096];
-	bytesSent = send(sock, server_header.c_str(), server_header.size(), 1);
-	while (sock != SOCKET_ERROR) {
-		bytesRecv = recv(sock, recvbuf, 4096, 0);
-		if (bytesRecv < 0) {
-			sock = SOCKET_ERROR;
-		}
-		printf("%s\n", recvbuf);
-		if (recvbuf > 0) {
-			receive_buff = recvbuf;
-			continue;
-		}
-		memset(recvbuf, 0, sizeof(recvbuf));
+	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
+	ServerSocket s(true);
+	char buffer[BUFFER_MAX];
+		while (sock != SOCKET_ERROR) {
+			bytes_recv = recv(sock, buffer, BUFFER_MAX, 0);
+				if (bytes_recv < 0) {
+					break;
+				}
+				if (bytes_recv >= BUFFER_MAX) {
+					s.error_output(sock, COMMAND_TOO_LONG);
+					memset(buffer, 0, sizeof(buffer));
+					continue;
+				}
+				std::cout << bytes_recv << std::endl;
+				printf("%s\n", buffer);
+				s.command_exec(sock, (std::string)buffer);
+				memset(buffer, 0, sizeof(buffer));
 	}
 }
 
