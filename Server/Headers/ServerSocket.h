@@ -26,7 +26,7 @@ char header[HEADER_BUFFER];
 class ServerSocket {
 	using Socket = SOCKET;
 public:
-	void command_exec(Socket sock, std::string& cmd);
+	std::string command_exec(Socket sock, std::string& cmd);
 	void exec_cmd(const std::string&& cmd);
 	void list_cmd();
 	void check_connections_cmd();

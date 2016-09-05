@@ -12,6 +12,7 @@ static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cm
 static std::string INITIALIZATION_ERROR = (PREFIX_ERROR.append("Initialization error.\n"));
 static std::string COMMAND_EXECUTION_FAIL = (PREFIX_ERROR.append("Execution command fault\n"));
 static std::string SOCKET_DISCONNECT = (PREFIX_ERROR.append("Client disconnected\n"));
+static std::string COMMAND_ACCEPTED = ("Command accepted");
 
 ServerSocket::ServerSocket(bool) {}
 
@@ -190,7 +191,7 @@ std::string ServerSocket::find_cmd(const std::string& cmd) {
 	}
 }
 
-void ServerSocket::command_exec(Socket sock, std::string& cmd) {
+std::string ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	const std::string help = "help";
 	const std::string exec = "exe";
 	const std::string list = "list";
@@ -201,8 +202,7 @@ void ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	}
 	std::string _cmd = check_cmd(cmd);
 	if (_cmd == EXIT) {
-		socket_output(SOCKET_DISCONNECT);
-		sock = SOCKET_ERROR;
+		return SOCKET_DISCONNECT;
 	}
 	if (_cmd != COMMAND_NOT_FOUND || _cmd != COMMAND_TOO_LONG) {
 		_cmd = find_cmd(_cmd);
@@ -220,6 +220,7 @@ void ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	else {
 		error_output(sock, COMMAND_NOT_FOUND);
 	}
+	return COMMAND_ACCEPTED;
 }
 
 void handle_new_connection(SOCKET sock) {
@@ -230,7 +231,7 @@ void handle_new_connection(SOCKET sock) {
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
 	char buffer[BUFFER_MAX];
-	buffer[BUFFER_MAX - 1] = 0x0A;
+	buffer[BUFFER_MAX - 1] = '\0';
 	header_recv = recv(sock, header, HEADER_BUFFER, 0);
 	if (header_recv != SOCKET_ERROR) {
 		while (sock != SOCKET_ERROR) {
@@ -240,13 +241,20 @@ void handle_new_connection(SOCKET sock) {
 			}
 			if (bytes_recv >= BUFFER_MAX) {
 				s.error_output(sock, COMMAND_TOO_LONG);
-				memset(buffer, 0, sizeof(buffer));
+				memset(buffer, 0, strlen(buffer));
 				continue;
 			}
-			std::cout << bytes_recv << std::endl;
-			printf("%s\n", buffer);
-			s.command_exec(sock, (std::string)buffer);
-			memset(buffer, 0, sizeof(buffer));
+			if (s.command_exec(sock, (std::string)buffer) == COMMAND_ACCEPTED) {
+				memset(buffer, 0, strlen(buffer));
+				continue;
+			}
+			else {
+				s.socket_output(SOCKET_DISCONNECT);
+				sock = SOCKET_ERROR;
+			}
+			/*std::cout << bytes_recv << std::endl;
+			buffer[bytes_recv] = '\0';
+			printf("%s\n", buffer);*/
 		}
 	}
 }
