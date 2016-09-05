@@ -33,9 +33,10 @@ void ClientSocket::connect_server() {
 		WSACleanup();
 		exit(0);
 	}
+	send(this->main_socket, this->header.c_str(), header.size() + 1 != 43 ? 43 : header.size() + 1, 1);
 }
 
-ClientSocket::ClientSocket(std::string ip, int port){
+ClientSocket::ClientSocket(std::string ip, int port) {
 	this->ip = ip;
 	this->port = port;
 
@@ -73,20 +74,19 @@ ClientSocket::ClientSocket() {
 void send_command(Socket sock) {
 	std::string sendbuf;
 	while (std::getline(std::cin, sendbuf)) {
-			send(sock, sendbuf.c_str(), (strlen(sendbuf.c_str())) + 1, 1);
-			if (sendbuf == "exit") {
-				exit(1);
-				sock = SOCKET_ERROR;
-			}
-			sendbuf.clear();
+		send(sock, sendbuf.c_str(), (strlen(sendbuf.c_str())) + 1, 1);
+		if (sendbuf == "exit") {
+			exit(1);
+			sock = SOCKET_ERROR;
+		}
+		sendbuf.clear();
 	}
-	
+
 }
 
 void receive_info(Socket sock) {
 	int recv_bytes = SOCKET_ERROR;
 	char recvbuf[BUFFER_MAX];
-
 	while (sock != SOCKET_ERROR) {
 		recv_bytes = recv(sock, recvbuf, BUFFER_MAX, 0);
 		if (recv_bytes < 0) {
@@ -98,7 +98,6 @@ void receive_info(Socket sock) {
 }
 
 void ClientSocket::client_loop() {
-	int recv = send(this->main_socket, this->header.c_str(), header.size()+1 != 43 ? 43 : header.size()+1, 1);
 	std::thread receive_thr(receive_info, this->main_socket);
 	std::thread send_thr(send_command, this->main_socket);
 	receive_thr.join();

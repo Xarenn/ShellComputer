@@ -2,20 +2,23 @@
 
 static std::string PREFIX_ERROR = "[ERROR] ";
 
+static std::string NULL_COMMAND = (PREFIX_ERROR.append("Command is null\n"));
 static std::string COMMAND_NOT_FOUND = (PREFIX_ERROR.append("Command not found. Use /cmd help\n"));
 static std::string SOCKET_CREATING_ERROR = (PREFIX_ERROR.append("Error creating socket\n"));
 static std::string BIND_FAILED = (PREFIX_ERROR.append("Bind() failed\n"));
 static std::string LISTEN_FAILED = (PREFIX_ERROR.append("Error listening on socket\n"));
 static std::string COMMAND_TOO_LONG = (PREFIX_ERROR.append("Command is too long\n"));
-static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkconn";
-static std::string EXIT = "exit";
+static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkconn\n";
+static std::string INITIALIZATION_ERROR = (PREFIX_ERROR.append("Initialization error.\n"));
+static std::string COMMAND_EXECUTION_FAIL = (PREFIX_ERROR.append("Execution command fault\n"));
+static std::string SOCKET_DISCONNECT = (PREFIX_ERROR.append("Client disconnected\n"));
 
-ServerSocket::ServerSocket(bool methods) {}
+ServerSocket::ServerSocket(bool) {}
 
 ServerSocket::ServerSocket(std::string ip, int port) {
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR)
-		printf("Initialization error.\n");
+		printf("%s", INITIALIZATION_ERROR);
 
 	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (this->main == INVALID_SOCKET)
@@ -36,10 +39,10 @@ ServerSocket::ServerSocket(std::string ip, int port) {
 	}
 }
 
-ServerSocket::ServerSocket(){
+ServerSocket::ServerSocket() {
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR)
-		printf("Initialization error.\n");
+		printf("%s", INITIALIZATION_ERROR);
 
 	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (this->main == INVALID_SOCKET)
@@ -98,20 +101,44 @@ std::string get_address() {
 }
 
 void ServerSocket::exec_cmd(const std::string&& cmd) {
+#ifdef __linux__
+	FILE* in;
+	char buff[512];
 
+	if (!(in = popen(cmd.c_str(), "r"))) {
+		error_output(COMMAND_EXECUTION_FAIL);
+	}
+	while (fgets(buff, sizeof(buff), in) != NULL) {
+		send(sock, buff, strlen(buff), 1);
+	}
+	pclose(in);
+#endif
+
+	// EXECUTION CMD -> WINDOWS #TODO
 }
 
 void ServerSocket::list_cmd() {
-
+	// SCAN PORTS 1337 or in use FILES;)
 }
 
 void ServerSocket::check_connections_cmd() {
+	// SCAN ONLINE CONNECTIONS ON SERVER :D
+}
 
+void ServerSocket::socket_output(const std::string& output) {
+	std::string header_message = header;
+	std::string tag = "IP:";
+	auto it = std::find_first_of(header_message.begin(), header_message.end(), tag.begin(), tag.end());
+	if (it == header_message.end()) {
+		return;
+	}
+	int pos = std::distance(header_message.begin(), it);
+	std::cout << "CLIENT IP: " << header_message.substr(pos + tag.size()) << std::endl;
+	std::cout << output << std::endl;
 }
 
 void ServerSocket::error_output(Socket sock, std::string& error) {
 	send(sock, error.c_str(), error.size() + 1, 1);
-	std::cout << error;
 	return;
 }
 
@@ -120,18 +147,28 @@ void ServerSocket::error_output(std::string& error) {
 	return;
 }
 
+std::string ServerSocket::parse_cmd(Socket sock, std::string & cmd) {
+	if (cmd == COMMAND_NOT_FOUND || cmd == COMMAND_TOO_LONG) {
+		error_output(sock, NULL_COMMAND);
+	}
+	cmd.erase(remove_if(cmd.begin(), cmd.end(), isspace), cmd.end());
+
+	if (cmd.empty()) {
+		error_output(sock, NULL_COMMAND);
+	}
+
+	return cmd;
+
+}
+
 std::string ServerSocket::check_cmd(const std::string& cmd) {
-	if (cmd.size() == 0) {
+	if (cmd.size() == 0 || cmd.size() < 4) {
 		error_output(COMMAND_NOT_FOUND);
 		return COMMAND_NOT_FOUND;
 	}
 	if (cmd.size() >= BUFFER_MAX) {
 		error_output(COMMAND_TOO_LONG);
 		return COMMAND_TOO_LONG;
-	}
-	if (cmd.size() < 4) {
-		error_output(COMMAND_NOT_FOUND);
-		return COMMAND_NOT_FOUND;
 	}
 	return cmd;
 }
@@ -140,16 +177,14 @@ std::string ServerSocket::find_cmd(const std::string& cmd) {
 	std::string tag = "/cmd";
 	auto it = std::find_first_of(cmd.begin(), cmd.end(), tag.begin(), tag.end());
 	if (it == cmd.end()) {
-		return COMMAND_NOT_FOUND;
-	}
-	if(cmd.size() < 4){
-		return COMMAND_NOT_FOUND;
+		return NULL_COMMAND;
 	}
 	else {
 		int pos = std::distance(cmd.begin(), it);
-		if (cmd[pos + 1] == 0x20) {
+		if (cmd.size() > tag.size() && cmd[tag.size()] == 0x20) {
 			return cmd.substr(pos + tag.size());
-		}else{
+		}
+		else {
 			return COMMAND_NOT_FOUND;
 		}
 	}
@@ -160,40 +195,26 @@ void ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	const std::string exec = "exe";
 	const std::string list = "list";
 	const std::string check_connections = "checkconn";
+	const std::string EXIT = "exit";
 	if (cmd.empty()) {
 		error_output(sock, COMMAND_NOT_FOUND);
 	}
 	std::string _cmd = check_cmd(cmd);
+	if (_cmd == EXIT) {
+		socket_output(SOCKET_DISCONNECT);
+		sock = SOCKET_ERROR;
+	}
 	if (_cmd != COMMAND_NOT_FOUND || _cmd != COMMAND_TOO_LONG) {
-		_cmd = find_cmd(cmd);
-		if (_cmd == COMMAND_NOT_FOUND) {
-			error_output(sock, COMMAND_NOT_FOUND);
-		}
-
-		if (_cmd == COMMAND_TOO_LONG) {
-			error_output(sock, COMMAND_TOO_LONG);
-		}
-
-		_cmd.erase(remove_if(_cmd.begin(), _cmd.end(), isspace), _cmd.end());
-
-		if (_cmd.empty()) {
-			error_output(sock, COMMAND_NOT_FOUND);
-		}
-
+		_cmd = find_cmd(_cmd);
+		parse_cmd(sock, _cmd);
 		if (_cmd == help) {
 			error_output(sock, HELP);
-		}
-
-		if (_cmd == list) {
+		}else if (_cmd == list) {
 			list_cmd();
-		}
-
-		if (_cmd == check_connections) {
+		}else if (_cmd == check_connections) {
 			check_connections_cmd();
-		}
-
-		if (_cmd == EXIT) {
-			sock = SOCKET_ERROR;
+		}else {
+			error_output(sock, HELP);
 		}
 	}
 	else {
@@ -202,26 +223,31 @@ void ServerSocket::command_exec(Socket sock, std::string& cmd) {
 }
 
 void handle_new_connection(SOCKET sock) {
+	ServerSocket s(true);
+	int header_recv = SOCKET_ERROR;
 	int bytes_recv = SOCKET_ERROR;
 	int bytes_sent = SOCKET_ERROR;
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
-	ServerSocket s(true);
 	char buffer[BUFFER_MAX];
+	buffer[BUFFER_MAX - 1] = 0x0A;
+	header_recv = recv(sock, header, HEADER_BUFFER, 0);
+	if (header_recv != SOCKET_ERROR) {
 		while (sock != SOCKET_ERROR) {
 			bytes_recv = recv(sock, buffer, BUFFER_MAX, 0);
-				if (bytes_recv < 0) {
-					break;
-				}
-				if (bytes_recv >= BUFFER_MAX) {
-					s.error_output(sock, COMMAND_TOO_LONG);
-					memset(buffer, 0, sizeof(buffer));
-					continue;
-				}
-				std::cout << bytes_recv << std::endl;
-				printf("%s\n", buffer);
-				s.command_exec(sock, (std::string)buffer);
+			if (bytes_recv < 0) {
+				break;
+			}
+			if (bytes_recv >= BUFFER_MAX) {
+				s.error_output(sock, COMMAND_TOO_LONG);
 				memset(buffer, 0, sizeof(buffer));
+				continue;
+			}
+			std::cout << bytes_recv << std::endl;
+			printf("%s\n", buffer);
+			s.command_exec(sock, (std::string)buffer);
+			memset(buffer, 0, sizeof(buffer));
+		}
 	}
 }
 

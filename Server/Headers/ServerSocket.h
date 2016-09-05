@@ -18,7 +18,10 @@
 #include <thread>
 #include <list>
 
+#define HEADER_BUFFER 256
 #define BUFFER_MAX 128
+
+char header[HEADER_BUFFER];
 
 class ServerSocket {
 	using Socket = SOCKET;
@@ -28,13 +31,16 @@ public:
 	void list_cmd();
 	void check_connections_cmd();
 
+	std::string parse_cmd(Socket sock, std::string & cmd);
 	std::string check_cmd(const std::string& cmd);
 	std::string find_cmd(const std::string& cmd);
 
+
 	ServerSocket(const std::string ip, int port);
-	ServerSocket(bool methods);
+	ServerSocket(bool);
 	ServerSocket();
 	Socket accept_client();
+	void socket_output(const std::string& output);
 	void error_output(Socket sock, std::string& error);
 	void error_output(std::string& error);
 	~ServerSocket();
