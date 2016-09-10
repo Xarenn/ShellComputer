@@ -13,7 +13,7 @@ static std::string INITIALIZATION_ERROR = (PREFIX_ERROR.append("Initialization e
 static std::string COMMAND_EXECUTION_FAIL = (PREFIX_ERROR.append("Execution command fault\n"));
 static std::string SOCKET_DISCONNECT = (PREFIX_ERROR.append("Client disconnected\n"));
 static std::string COMMAND_ACCEPTED = ("Command accepted\n");
-static std::string NULL_CLIENT = (PREFIX_ERROR.append("Client NULL"));
+static std::string NULL_CLIENT = (PREFIX_ERROR.append("Client NULL\n"));
 
 ServerSocket::ServerSocket(bool) {}
 
@@ -68,9 +68,11 @@ SOCKET ServerSocket::accept_client() {
 	if (listen(this->main, 1) == SOCKET_ERROR) {
 		printf("%s.", LISTEN_FAILED);
 	}
+
 	while (acceptSocket == SOCKET_ERROR) {
 		acceptSocket = accept(this->main, NULL, NULL);
 	}
+
 	printf("Client joined\n");
 	return acceptSocket;
 }
@@ -81,6 +83,7 @@ std::string get_host_name() {
 		std::cerr << "Error " << WSAGetLastError() <<
 			" when getting local host name." << std::endl;
 	}
+
 	return hostname;
 }
 
@@ -90,9 +93,11 @@ std::string get_address() {
 	if (phe == 0) {
 		std::cerr << "Bad host lookup." << std::endl;
 	}
+
 	for (int i = 0; phe->h_addr_list[i] != 0; ++i) {
 		memcpy(&addr, phe->h_addr_list[i], sizeof(in_addr));
 	}
+
 	return inet_ntoa(addr);
 }
 
@@ -111,14 +116,18 @@ void ServerSocket::exec_cmd(const std::string&& cmd) {
 #endif
 
 	// EXECUTION CMD -> WINDOWS #TODO
+
 }
 
 void ServerSocket::list_cmd() {
+
 	// SCAN PORTS 1337 or use FILES;)
+
 }
 
 void ServerSocket::check_connections_cmd(Socket sock, std::vector<std::string>& clients) {
-	std::string connection_list = "\nConnection list: \n";
+	std::string connection_list = "\nOnline ";
+	connection_list.append(online_clients+"\n");
 	for (auto const& client : clients) {
 		connection_list.append(client).append("\n");
 	}
@@ -133,6 +142,7 @@ void ServerSocket::socket_output(const std::string& output) {
 	if (it == header_message.end()) {
 		return;
 	}
+
 	int pos = std::distance(header_message.begin(), it);
 	std::cout << "CLIENT IP: " << header_message.substr(pos + tag.size()) << std::endl;
 	std::cout << output << std::endl;
@@ -157,8 +167,8 @@ std::string ServerSocket::parse_cmd(Socket sock, std::string & cmd) {
 	if (cmd.empty()) {
 		error_output(sock, NULL_COMMAND);
 	}
-	return cmd;
 
+	return cmd;
 }
 
 std::string ServerSocket::check_cmd(const std::string& cmd) {
@@ -166,10 +176,12 @@ std::string ServerSocket::check_cmd(const std::string& cmd) {
 		error_output(COMMAND_NOT_FOUND);
 		return COMMAND_NOT_FOUND;
 	}
+
 	if (cmd.size() >= BUFFER_MAX) {
 		error_output(COMMAND_TOO_LONG);
 		return COMMAND_TOO_LONG;
 	}
+
 	return cmd;
 }
 
@@ -178,13 +190,11 @@ std::string ServerSocket::find_cmd(const std::string& cmd) {
 	auto it = std::find_first_of(cmd.begin(), cmd.end(), tag.begin(), tag.end());
 	if (it == cmd.end()) {
 		return NULL_COMMAND;
-	}
-	else {
+	}else {
 		int pos = std::distance(cmd.begin(), it);
 		if (cmd.size() > tag.size() && cmd[tag.size()] == 0x20) {
 			return cmd.substr(pos + tag.size());
-		}
-		else {
+		}else {
 			return COMMAND_NOT_FOUND;
 		}
 	}
@@ -199,6 +209,7 @@ std::string ServerSocket::parse_header(char* header) {
 	if (ip == end) {
 		return NULL_CLIENT;
 	}
+
 	client = client_header.substr(std::distance(client_header.begin(), ip));
 	return client;
 }
@@ -212,10 +223,13 @@ std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 	if (cmd.empty()) {
 		error_output(client, COMMAND_NOT_FOUND);
 	}
+
 	std::string _cmd = check_cmd(cmd);
+
 	if (_cmd == EXIT) {
 		return SOCKET_DISCONNECT;
 	}
+
 	if (_cmd != COMMAND_NOT_FOUND || _cmd != COMMAND_TOO_LONG) {
 		_cmd = find_cmd(_cmd);
 		parse_cmd(client, _cmd);
@@ -228,42 +242,47 @@ std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 		}else {
 			error_output(client, HELP);
 		}
-	}
-	else {
+	}else {
 		error_output(client, COMMAND_NOT_FOUND);
 	}
+
 	return COMMAND_ACCEPTED;
 }
 
 void handle_new_connection(SOCKET sock) {
 	ServerSocket s(true);
 	int header_recv = SOCKET_ERROR;
-	header_recv = recv(sock, Client::header, HEADER_BUFFER, 0);
 	int bytes_recv = SOCKET_ERROR;
 	int bytes_sent = SOCKET_ERROR;
+
+	header_recv = recv(sock, Client::header, HEADER_BUFFER, 0);
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
+
 	char buffer[BUFFER_MAX];
 	buffer[BUFFER_MAX - 1] = '\0';
 	memset(buffer, 0, sizeof(buffer));
+
 	std::cout << Client::header << std::endl;
 	clients.push_back(s.parse_header(Client::header));
 	memset(Client::header, 0, strlen(Client::header));
+
 	while (sock != SOCKET_ERROR) {
 			bytes_recv = recv(sock, buffer, BUFFER_MAX, 0);
 			if (bytes_recv < 0) {
 				break;
 			}
+
 			if (bytes_recv >= BUFFER_MAX) {
 				s.error_output(sock, COMMAND_TOO_LONG);
 				memset(buffer, 0, strlen(buffer));
 				continue;
 			}
+
 			if (s.command_exec(sock, (std::string)buffer) == COMMAND_ACCEPTED) {
 				memset(buffer, 0, strlen(buffer));
 				continue;
-			}
-			else {
+			}else {
 				--online_clients;
 				s.socket_output(SOCKET_DISCONNECT);
 				sock = SOCKET_ERROR;

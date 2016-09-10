@@ -80,9 +80,9 @@ void send_command(Socket sock) {
 			exit(1);
 			sock = SOCKET_ERROR;
 		}
+
 		sendbuf.clear();
 	}
-
 }
 
 void receive_info(Socket sock) {
@@ -93,6 +93,7 @@ void receive_info(Socket sock) {
 		if (recv_bytes < 0) {
 			break;
 		}
+
 		printf("[Bytes]: %i, Text: %s\n", recv_bytes, recvbuf);
 		memset(recvbuf, 0, sizeof(recvbuf));
 	}
