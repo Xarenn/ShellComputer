@@ -21,15 +21,25 @@
 #define HEADER_BUFFER 256
 #define BUFFER_MAX 128
 
-char header[HEADER_BUFFER];
+namespace Client {
+	char header[HEADER_BUFFER];
+	static int online_clients = 0;
+	std::vector<std::string> clients;
+}
+
+using Client::online_clients;
+using Client::clients;
 
 class ServerSocket {
 	using Socket = SOCKET;
 public:
+	std::string parse_header(char* header);
+
+
 	std::string command_exec(Socket sock, std::string& cmd);
 	void exec_cmd(const std::string&& cmd);
 	void list_cmd();
-	void check_connections_cmd();
+	void check_connections_cmd(Socket sock, std::vector<std::string>& clients);
 
 	std::string parse_cmd(Socket sock, std::string & cmd);
 	std::string check_cmd(const std::string& cmd);

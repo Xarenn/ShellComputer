@@ -12,7 +12,8 @@ static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cm
 static std::string INITIALIZATION_ERROR = (PREFIX_ERROR.append("Initialization error.\n"));
 static std::string COMMAND_EXECUTION_FAIL = (PREFIX_ERROR.append("Execution command fault\n"));
 static std::string SOCKET_DISCONNECT = (PREFIX_ERROR.append("Client disconnected\n"));
-static std::string COMMAND_ACCEPTED = ("Command accepted");
+static std::string COMMAND_ACCEPTED = ("Command accepted\n");
+static std::string NULL_CLIENT = (PREFIX_ERROR.append("Client NULL"));
 
 ServerSocket::ServerSocket(bool) {}
 
@@ -23,9 +24,7 @@ ServerSocket::ServerSocket(std::string ip, int port) {
 
 	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (this->main == INVALID_SOCKET)
-	{
 		printf("%s: %ld", SOCKET_CREATING_ERROR, WSAGetLastError());
-	}
 
 	sockaddr_in service;
 	memset(&service, 0, sizeof(service));
@@ -33,8 +32,7 @@ ServerSocket::ServerSocket(std::string ip, int port) {
 	service.sin_addr.s_addr = inet_addr(ip.c_str());
 	service.sin_port = htons(port);
 
-	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
-	{
+	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR) {
 		printf("%s", BIND_FAILED);
 		closesocket(this->main);
 	}
@@ -47,9 +45,7 @@ ServerSocket::ServerSocket() {
 
 	this->main = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (this->main == INVALID_SOCKET)
-	{
 		printf("%s: %ld", SOCKET_CREATING_ERROR, WSAGetLastError());
-	}
 
 	sockaddr_in service;
 	memset(&service, 0, sizeof(service));
@@ -57,8 +53,7 @@ ServerSocket::ServerSocket() {
 	service.sin_addr.s_addr = inet_addr("127.0.0.1");
 	service.sin_port = htons(1337);
 
-	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR)
-	{
+	if (bind(this->main, (SOCKADDR *)& service, sizeof(service)) == SOCKET_ERROR) {
 		printf("%s", BIND_FAILED);
 		closesocket(this->main);
 	}
@@ -119,15 +114,20 @@ void ServerSocket::exec_cmd(const std::string&& cmd) {
 }
 
 void ServerSocket::list_cmd() {
-	// SCAN PORTS 1337 or in use FILES;)
+	// SCAN PORTS 1337 or use FILES;)
 }
 
-void ServerSocket::check_connections_cmd() {
-	// SCAN ONLINE CONNECTIONS ON SERVER :D
+void ServerSocket::check_connections_cmd(Socket sock, std::vector<std::string>& clients) {
+	std::string connection_list = "\nConnection list: \n";
+	for (auto const& client : clients) {
+		connection_list.append(client).append("\n");
+	}
+
+	send(sock, connection_list.c_str(), connection_list.size() + 1, 1);
 }
 
 void ServerSocket::socket_output(const std::string& output) {
-	std::string header_message = header;
+	std::string header_message = Client::header;
 	std::string tag = "IP:";
 	auto it = std::find_first_of(header_message.begin(), header_message.end(), tag.begin(), tag.end());
 	if (it == header_message.end()) {
@@ -157,7 +157,6 @@ std::string ServerSocket::parse_cmd(Socket sock, std::string & cmd) {
 	if (cmd.empty()) {
 		error_output(sock, NULL_COMMAND);
 	}
-
 	return cmd;
 
 }
@@ -191,14 +190,27 @@ std::string ServerSocket::find_cmd(const std::string& cmd) {
 	}
 }
 
-std::string ServerSocket::command_exec(Socket sock, std::string& cmd) {
+std::string ServerSocket::parse_header(char* header) {
+	std::string client_header = header;
+	std::string::iterator end = client_header.end();
+	std::string ip_tag = "IP:";
+	std::string client;
+	auto ip = std::find_first_of(client_header.begin(), end, ip_tag.begin(), ip_tag.end());
+	if (ip == end) {
+		return NULL_CLIENT;
+	}
+	client = client_header.substr(std::distance(client_header.begin(), ip));
+	return client;
+}
+
+std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 	const std::string help = "help";
 	const std::string exec = "exe";
 	const std::string list = "list";
 	const std::string check_connections = "checkconn";
 	const std::string EXIT = "exit";
 	if (cmd.empty()) {
-		error_output(sock, COMMAND_NOT_FOUND);
+		error_output(client, COMMAND_NOT_FOUND);
 	}
 	std::string _cmd = check_cmd(cmd);
 	if (_cmd == EXIT) {
@@ -206,19 +218,19 @@ std::string ServerSocket::command_exec(Socket sock, std::string& cmd) {
 	}
 	if (_cmd != COMMAND_NOT_FOUND || _cmd != COMMAND_TOO_LONG) {
 		_cmd = find_cmd(_cmd);
-		parse_cmd(sock, _cmd);
+		parse_cmd(client, _cmd);
 		if (_cmd == help) {
-			error_output(sock, HELP);
+			error_output(client, HELP);
 		}else if (_cmd == list) {
 			list_cmd();
 		}else if (_cmd == check_connections) {
-			check_connections_cmd();
+			check_connections_cmd(client, Client::clients);
 		}else {
-			error_output(sock, HELP);
+			error_output(client, HELP);
 		}
 	}
 	else {
-		error_output(sock, COMMAND_NOT_FOUND);
+		error_output(client, COMMAND_NOT_FOUND);
 	}
 	return COMMAND_ACCEPTED;
 }
@@ -226,15 +238,18 @@ std::string ServerSocket::command_exec(Socket sock, std::string& cmd) {
 void handle_new_connection(SOCKET sock) {
 	ServerSocket s(true);
 	int header_recv = SOCKET_ERROR;
+	header_recv = recv(sock, Client::header, HEADER_BUFFER, 0);
 	int bytes_recv = SOCKET_ERROR;
 	int bytes_sent = SOCKET_ERROR;
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
 	char buffer[BUFFER_MAX];
 	buffer[BUFFER_MAX - 1] = '\0';
-	header_recv = recv(sock, header, HEADER_BUFFER, 0);
-	if (header_recv != SOCKET_ERROR) {
-		while (sock != SOCKET_ERROR) {
+	memset(buffer, 0, sizeof(buffer));
+	std::cout << Client::header << std::endl;
+	clients.push_back(s.parse_header(Client::header));
+	memset(Client::header, 0, strlen(Client::header));
+	while (sock != SOCKET_ERROR) {
 			bytes_recv = recv(sock, buffer, BUFFER_MAX, 0);
 			if (bytes_recv < 0) {
 				break;
@@ -249,13 +264,13 @@ void handle_new_connection(SOCKET sock) {
 				continue;
 			}
 			else {
+				--online_clients;
 				s.socket_output(SOCKET_DISCONNECT);
 				sock = SOCKET_ERROR;
 			}
 			/*std::cout << bytes_recv << std::endl;
 			buffer[bytes_recv] = '\0';
 			printf("%s\n", buffer);*/
-		}
 	}
 }
 
@@ -268,6 +283,7 @@ int main(void) {
 			std::cerr << "errorr";
 			continue;
 		}
+		++online_clients;
 		threads.push_back(new std::thread(handle_new_connection, socket));
 	}
 }
