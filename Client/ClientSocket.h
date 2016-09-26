@@ -20,7 +20,7 @@ using Socket = SOCKET;
 
 class ClientSocket {
 
-#define BUFFER_MAX 128
+#define BUFFER_MAX 1024
 
 public:
 	ClientSocket();

