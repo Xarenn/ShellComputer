@@ -21,6 +21,8 @@ using Socket = SOCKET;
 class ClientSocket {
 
 #define BUFFER_MAX 1024
+#define IP "127.0.0.1"
+#define PORT 1337
 
 public:
 	ClientSocket();

@@ -56,8 +56,8 @@ ClientSocket::ClientSocket(std::string ip, int port) {
 }
 
 ClientSocket::ClientSocket() {
-	this->ip = "127.0.0.1";
-	this->port = 1337;
+	this->ip = IP;
+	this->port = PORT;
 
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (result != NO_ERROR)
@@ -105,4 +105,10 @@ void ClientSocket::client_loop() {
 	std::thread send_thr(send_command, this->main_socket);
 	receive_thr.join();
 	send_thr.join();
+}
+
+int main() {
+	ClientSocket client(IP, PORT);
+	client.client_loop();
+	return 0;
 }
