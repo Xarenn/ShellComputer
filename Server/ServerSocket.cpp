@@ -86,19 +86,6 @@ std::string get_address() {
 }
 
 void ServerSocket::exec_cmd(Socket sock, const char* cmd) {
-#ifdef __linux__
-	FILE* in;
-	char buff[512];
-
-	if (!(in = popen(cmd.c_str(), "r"))) {
-		error_output(COMMAND_EXECUTION_FAIL);
-	}
-	while (fgets(buff, sizeof(buff), in) != NULL) {
-		send(sock, buff, strlen(buff), 1);
-	}
-	pclose(in);
-#endif
-
 	// EXECUTION CMD -> WINDOWS
 
 char buffer[128];
@@ -112,6 +99,18 @@ while (!feof(pipe.get())) {
 		result += buffer;
 	}
 }
+#ifdef __linux__
+	FILE* in;
+	char buff[512];
+
+	if (!(in = popen(cmd.c_str(), "r"))) {
+		error_output(COMMAND_EXECUTION_FAIL);
+	}
+	while (fgets(buff, sizeof(buff), in) != NULL) {
+		send(sock, buff, strlen(buff), 1);
+	}
+	pclose(in);
+#endif
 
 send(sock, result.c_str(), result.size(), 1);
 }
@@ -305,7 +304,7 @@ void handle_new_connection(SOCKET sock) {
 	int bytes_recv = SOCKET_ERROR;
 	int bytes_sent = SOCKET_ERROR;
 
-	header_recv = recv(sock, Client::header, HEADER_BUFFER, 0);
+	header_recv = recv(sock, Client::header, HEADER_SIZE, 0);
 	std::string server_header = "Hello im server. My IP: " + get_address();
 	bytes_sent = send(sock, server_header.c_str(), server_header.size(), 1);
 	char buffer[BUFFER_MAX] = { 0 };

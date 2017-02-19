@@ -23,7 +23,7 @@
 #include <errno.h>
 #include <sstream>
 
-#define HEADER_BUFFER 256
+#define HEADER_SIZE 256
 #define BUFFER_MAX 128
 
 static std::string PREFIX_ERROR = "[ERROR] ";
@@ -44,7 +44,7 @@ static std::string INVALID_COMMAND = (PREFIX_ERROR.append("Invalid command\n"));
 static std::string DIRECTORY_NOT_FOUND = (PREFIX_ERROR.append("Directory not found \n"));
 
 namespace Client {
-	char header[HEADER_BUFFER];
+	char header[HEADER_SIZE];
 	static int online_clients = 0;
 	std::vector<std::string> clients;
 }
