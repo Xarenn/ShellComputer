@@ -13,14 +13,15 @@ test: all
 	client.exe
   
 I use mingw 4.8.1 with threading   
- #Server
+
+##Server
  
  To compile server use visual c++ compiler
  
- ##Configuration
+##Configuration
  In file client.h change IP and PORT in define identifier.
  
- #How is it work?
+##How is it work?
  
  Run Server on computers which we want to send msg or commands, and another one install client.
  Join to the server and done!
